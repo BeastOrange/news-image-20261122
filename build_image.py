@@ -1,223 +1,246 @@
 #!/usr/bin/env python3
-"""Draw the front page of THE WORLD TODAY for Sunday 22 November 2026.
+"""One-day newspaper front page for Sunday 22 November 2026.
 
-Deterministic: fixed palette, fixed fonts, no randomness, no timestamps,
-no network. Two runs produce byte-identical PNG output.
+Everything is drawn from fixed values: the same palette, the same
+fonts, no clock, no dice, no network. Run the script twice and the
+PNG bytes come out identical.
 """
-import os
 from PIL import Image, ImageDraw, ImageFont
 
-W, H = 1024, 1024
-PAPER = (247, 242, 231)
-INK = (26, 26, 26)
-RED = (163, 22, 33)
-NAVY = (31, 58, 95)
-GREY = (90, 86, 78)
-DAWN_TOP = (44, 62, 110)
-DAWN_MID = (196, 110, 66)
-DAWN_LOW = (238, 178, 104)
-SEA = (38, 84, 110)
-SEA_DARK = (24, 60, 84)
-LAND = (58, 66, 52)
+PAGE = 1024
+EDGE = 36
+FAR = 988
 
-FONT_DIR = "/usr/share/fonts/truetype/dejavu"
-SERIF_B = os.path.join(FONT_DIR, "DejaVuSerif-Bold.ttf")
-SERIF = os.path.join(FONT_DIR, "DejaVuSerif.ttf")
-SANS = os.path.join(FONT_DIR, "DejaVuSans.ttf")
-SANS_B = os.path.join(FONT_DIR, "DejaVuSans-Bold.ttf")
+PAPER_RGB = (248, 243, 232)
+INK_RGB = (24, 24, 24)
+FLAG_RGB = (168, 24, 34)
+NAVY_RGB = (30, 56, 94)
+FAINT_RGB = (92, 88, 80)
+DIVIDER_RGB = (200, 192, 175)
+
+DAWN_HIGH = (46, 64, 112)
+DAWN_MID = (198, 112, 68)
+DAWN_LOW = (240, 180, 106)
+SEA_RGB = (38, 84, 110)
+SEA_LINE = (24, 60, 84)
+HILL_RGB = (58, 66, 52)
+SUN_RGB = (255, 226, 150)
+BUILDING_RGB = (240, 236, 224)
+
+DEJAVU = "/usr/share/fonts/truetype/dejavu"
+SERIF_BOLD = DEJAVU + "/DejaVuSerif-Bold.ttf"
+SERIF_PLAIN = DEJAVU + "/DejaVuSerif.ttf"
+SANS_PLAIN = DEJAVU + "/DejaVuSans.ttf"
+SANS_BOLD = DEJAVU + "/DejaVuSans-Bold.ttf"
 
 
-def load(path, size):
+def font_at(path, size):
     return ImageFont.truetype(path, size)
 
 
-def fit(draw, path, text, max_w, start):
-    """Largest font size at or below `start` whose text fits `max_w`."""
+def shrink_to(draw, path, text, limit, start):
+    """Biggest size at or below `start` that fits `text` inside `limit`."""
     size = start
     while size > 10:
-        fnt = load(path, size)
-        if draw.textlength(text, font=fnt) <= max_w:
-            return fnt
+        candidate = font_at(path, size)
+        if draw.textlength(text, font=candidate) <= limit:
+            return candidate
         size -= 1
-    return load(path, 10)
+    return font_at(path, 10)
 
 
-def wrap(draw, text, fnt, width):
-    """Greedy word wrap to lines fitting `width` pixels."""
-    lines, cur = [], ""
-    for word in text.split(" "):
-        trial = (cur + " " + word).strip()
-        if draw.textlength(trial, font=fnt) <= width:
-            cur = trial
+def wrap_text(draw, text, face, limit):
+    """Split `text` into lines no wider than `limit` pixels."""
+    out = []
+    current = ""
+    for word in text.split():
+        joined = (current + " " + word).strip()
+        if draw.textlength(joined, font=face) <= limit:
+            current = joined
         else:
-            if cur:
-                lines.append(cur)
-            cur = word
-    if cur:
-        lines.append(cur)
-    return lines
+            if current:
+                out.append(current)
+            current = word
+    if current:
+        out.append(current)
+    return out
 
 
-def hline(draw, x0, x1, y, color=INK, width=2):
-    draw.line([(x0, y), (x1, y)], fill=color, width=width)
+def bar(draw, left, right, y, colour=INK_RGB, thick=2):
+    draw.line([(left, y), (right, y)], fill=colour, width=thick)
 
 
-def masthead(draw):
-    title = load(SERIF_B, 76)
-    draw.text((W // 2, 28), "THE WORLD TODAY", font=title, fill=INK,
+def draw_nameplate(draw):
+    name = font_at(SERIF_BOLD, 76)
+    draw.text((PAGE // 2, 28), "THE WORLD TODAY", font=name, fill=INK_RGB,
               anchor="ma")
-    hline(draw, 36, 988, 126, INK, 4)
-    hline(draw, 36, 988, 132, INK, 1)
-    date_f = load(SANS_B, 21)
-    draw.text((W // 2, 142), "SUNDAY, 22 NOVEMBER 2026  |  ONE DAY, ONE IMAGE",
-              font=date_f, fill=RED, anchor="ma")
+    bar(draw, EDGE, FAR, 126, INK_RGB, 4)
+    bar(draw, EDGE, FAR, 132, INK_RGB, 1)
+    dateline = font_at(SANS_BOLD, 21)
+    draw.text((PAGE // 2, 142),
+              "SUNDAY, 22 NOVEMBER 2026  |  ONE DAY, ONE IMAGE",
+              font=dateline, fill=FLAG_RGB, anchor="ma")
 
 
-LEAD_KICKER = "CLIMATE"
-LEAD_HEAD = "COP31 CLOSES IN ON A DEAL"
-LEAD_SUB = "Antalya talks near a final pact after running past their Friday deadline"
-LEAD_BODY = ("COP31 presidents Australia and Turkey put forward a text they "
+LEAD = {
+    "kicker": "CLIMATE",
+    "head": "COP31 CLOSES IN ON A DEAL",
+    "deck": "Antalya talks near a final pact after running past their Friday deadline",
+    "body": ("COP31 presidents Australia and Turkey put forward a text they "
              "say every side can accept. Nearly 200 delegations have until "
-             "03:00 GMT to object, with approval set for Sunday morning.")
+             "03:00 GMT to object, with approval set for Sunday morning."),
+}
 
 
-def scene(draw, x0, y0, x1, y1):
-    """Dawn over the Antalya coast: sky bands, rising sun, sea, shore."""
-    draw.rectangle([x0, y0, x1, y1], fill=DAWN_TOP)
-    bands = 28
-    span = int((y1 - y0) * 0.58)
-    for i in range(bands):
-        t = i / (bands - 1)
-        if t < 0.5:
-            a, b, u = DAWN_TOP, DAWN_MID, t * 2
+def draw_dawn_panel(draw, left, top, right, bottom):
+    """Sunrise over the Antalya shore: banded sky, sun, sea, hills."""
+    draw.rectangle([left, top, right, bottom], fill=DAWN_HIGH)
+    sky_h = int((bottom - top) * 0.58)
+    steps = 28
+    for step in range(steps):
+        frac = step / (steps - 1)
+        if frac < 0.5:
+            lo, hi, u = DAWN_HIGH, DAWN_MID, frac * 2
         else:
-            a, b, u = DAWN_MID, DAWN_LOW, (t - 0.5) * 2
-        col = tuple(int(a[c] + (b[c] - a[c]) * u) for c in range(3))
-        yy = y0 + span * i // bands
-        draw.rectangle([x0, yy, x1, yy + span // bands + 1], fill=col)
-    horizon = y0 + span
-    # sun disc low over the water
-    sx, sy, sr = x0 + 190, horizon - 42, 34
-    draw.ellipse([sx - sr, sy - sr, sx + sr, sy + sr], fill=(255, 226, 150))
-    draw.ellipse([sx - sr - 8, sy - sr - 8, sx + sr + 8, sy + sr + 8],
-                 outline=(255, 226, 150), width=2)
-    # sun path on the water
+            lo, hi, u = DAWN_MID, DAWN_LOW, (frac - 0.5) * 2
+        shade = tuple(int(lo[i] + (hi[i] - lo[i]) * u) for i in range(3))
+        y = top + sky_h * step // steps
+        draw.rectangle([left, y, right, y + sky_h // steps + 1], fill=shade)
+    sea_line = top + sky_h
+    sun_x, sun_y, sun_r = left + 190, sea_line - 42, 34
+    draw.ellipse([sun_x - sun_r - 8, sun_y - sun_r - 8,
+                  sun_x + sun_r + 8, sun_y + sun_r + 8],
+                 outline=SUN_RGB, width=2)
+    draw.ellipse([sun_x - sun_r, sun_y - sun_r,
+                  sun_x + sun_r, sun_y + sun_r], fill=SUN_RGB)
     for k in range(5):
-        yy = horizon + 8 + k * 14
-        ww = 26 + k * 10
-        draw.line([(sx - ww, yy), (sx + ww, yy)], fill=(255, 214, 130),
-                  width=3)
-    # sea
-    draw.rectangle([x0, horizon, x1, y1], fill=SEA)
+        y = sea_line + 8 + k * 14
+        half = 26 + k * 10
+        draw.line([(sun_x - half, y), (sun_x + half, y)],
+                  fill=(255, 214, 130), width=3)
+    draw.rectangle([left, sea_line, right, bottom], fill=SEA_RGB)
     for k in range(4):
-        yy = horizon + 26 + k * 22
-        draw.line([(x0 + 14, yy), (x1 - 14, yy)], fill=SEA_DARK, width=2)
-    # distant Taurus mountains and shore
-    draw.polygon([(x0, horizon), (x0 + 90, horizon - 34),
-                  (x0 + 170, horizon - 12), (x0 + 250, horizon - 40),
-                  (x0 + 330, horizon - 8), (x1, horizon - 18), (x1, horizon)],
-                 fill=LAND)
-    # a white minaret and rooftops on the shore
-    bx = x0 + 30
-    draw.rectangle([bx, horizon - 46, bx + 8, horizon], fill=(240, 236, 224))
-    draw.polygon([(bx - 3, horizon - 46), (bx + 4, horizon - 62),
-                  (bx + 11, horizon - 46)], fill=(240, 236, 224))
-    draw.rectangle([bx + 16, horizon - 18, bx + 64, horizon],
+        y = sea_line + 26 + k * 22
+        draw.line([(left + 14, y), (right - 14, y)], fill=SEA_LINE, width=2)
+    draw.polygon([(left, sea_line), (left + 90, sea_line - 34),
+                  (left + 170, sea_line - 12), (left + 250, sea_line - 40),
+                  (left + 330, sea_line - 8), (right, sea_line - 18),
+                  (right, sea_line)], fill=HILL_RGB)
+    tower_x = left + 30
+    draw.rectangle([tower_x, sea_line - 46, tower_x + 8, sea_line],
+                   fill=BUILDING_RGB)
+    draw.polygon([(tower_x - 3, sea_line - 46),
+                  (tower_x + 4, sea_line - 62),
+                  (tower_x + 11, sea_line - 46)], fill=BUILDING_RGB)
+    draw.rectangle([tower_x + 16, sea_line - 18, tower_x + 64, sea_line],
                    fill=(232, 226, 210))
-    lab = load(SANS_B, 17)
-    draw.text((x0 + 12, y1 - 30), "ANTALYA, TURKIYE",
-              font=lab, fill=(255, 255, 255))
+    caption = font_at(SANS_BOLD, 17)
+    draw.text((left + 12, bottom - 30), "ANTALYA, TURKIYE",
+              font=caption, fill=(255, 255, 255))
 
 
-def lead(draw):
-    x0, x1 = 36, 988
-    y = 176
-    kick = load(SANS_B, 22)
-    draw.text((x0, y), LEAD_KICKER, font=kick, fill=RED)
-    head = fit(draw, SERIF_B, LEAD_HEAD, 570, 38)
-    draw.text((x0, y + 30), LEAD_HEAD, font=head, fill=INK)
-    sub = load(SERIF, 24)
-    sub_lines = wrap(draw, LEAD_SUB, sub, 560)
-    sy = y + 84
-    for i, line in enumerate(sub_lines):
-        draw.text((x0, sy + i * 30), line, font=sub, fill=NAVY)
-    body = load(SANS, 19)
-    by = sy + 30 * len(sub_lines) + 14
-    for i, line in enumerate(wrap(draw, LEAD_BODY, body, 560)):
-        draw.text((x0, by + i * 25), line, font=body, fill=INK)
-    scene(draw, 620, y, x1, y + 300)
-    hline(draw, x0, x1, y + 318, INK, 2)
+def draw_lead_story(draw):
+    top = 176
+    kicker_face = font_at(SANS_BOLD, 22)
+    draw.text((EDGE, top), LEAD["kicker"], font=kicker_face, fill=FLAG_RGB)
+    head_face = shrink_to(draw, SERIF_BOLD, LEAD["head"], 570, 38)
+    draw.text((EDGE, top + 30), LEAD["head"], font=head_face, fill=INK_RGB)
+    deck_face = font_at(SERIF_PLAIN, 24)
+    deck_lines = wrap_text(draw, LEAD["deck"], deck_face, 560)
+    y = top + 84
+    for line in deck_lines:
+        draw.text((EDGE, y), line, font=deck_face, fill=NAVY_RGB)
+        y += 30
+    body_face = font_at(SANS_PLAIN, 19)
+    y += 14
+    for line in wrap_text(draw, LEAD["body"], body_face, 560):
+        draw.text((EDGE, y), line, font=body_face, fill=INK_RGB)
+        y += 25
+    draw_dawn_panel(draw, 620, top, FAR, top + 300)
+    bar(draw, EDGE, FAR, top + 318, INK_RGB, 2)
 
 
 STORIES = [
-    ("BALTIC SEA", "DRONES SET RUSSIAN SHIP ABLAZE",
-     "Sparta II, bound for Kaliningrad, is hit in the Gulf of Finland "
-     "and drifts into Finnish waters, still burning. Helsinki says "
-     "Ukraine is likely behind it."),
-    ("NATO", "RUTTE: EVERY INCH DEFENDED",
-     "A day after Russian missiles landed in Poland, the NATO chief "
-     "vows in Warsaw to defend all Polish territory. Its council "
-     "meets on Monday."),
-    ("MEXICO", "\u2018EL CHAPO ISIDRO\u2019 CAPTURED",
-     "FBI Ten Most Wanted boss Fausto Isidro Meza-Flores is seized in "
-     "Guasave; 11 die \u2014 four soldiers, seven gunmen \u2014 as "
-     "Sinaloa erupts."),
-    ("BRAZIL", "BOLSONARO IN INTENSIVE CARE",
-     "The jailed ex-president, 71, is admitted in Brasilia with an "
-     "acute bowel obstruction; doctors say he is stable and conscious."),
-    ("NIGERIA", "BOAT CAPSIZES; AT LEAST 24 DEAD",
-     "A boat carrying mourners to a funeral sinks in Bayelsa state; "
-     "emergency services put the toll at 24 as the search goes on."),
-    ("UKRAINE", "MISSILE HITS ZELENSKY\u2019S HOME CITY",
-     "A ballistic missile strike on Kryvyi Rih kills two and wounds "
-     "60, as Russia\u2019s war keeps spilling across borders."),
+    {"kicker": "BALTIC SEA",
+     "head": "DRONES SET RUSSIAN SHIP ABLAZE",
+     "body": ("Sparta II, bound for Kaliningrad, is hit in the Gulf of "
+              "Finland and drifts into Finnish waters, still burning. "
+              "Helsinki says Ukraine is likely behind it.")},
+    {"kicker": "NATO",
+     "head": "RUTTE: EVERY INCH DEFENDED",
+     "body": ("A day after Russian missiles landed in Poland, the NATO "
+              "chief vows in Warsaw to defend all Polish territory. Its "
+              "council meets on Monday.")},
+    {"kicker": "MEXICO",
+     "head": "\u2018EL CHAPO ISIDRO\u2019 CAPTURED",
+     "body": ("FBI Ten Most Wanted boss Fausto Isidro Meza-Flores is "
+              "seized in Guasave; 11 die \u2014 four soldiers, seven "
+              "gunmen \u2014 as Sinaloa erupts.")},
+    {"kicker": "BRAZIL",
+     "head": "BOLSONARO IN INTENSIVE CARE",
+     "body": ("The jailed ex-president, 71, is admitted in Brasilia with "
+              "an acute bowel obstruction; doctors say he is stable and "
+              "conscious.")},
+    {"kicker": "NIGERIA",
+     "head": "BOAT CAPSIZES; AT LEAST 24 DEAD",
+     "body": ("A boat carrying mourners to a funeral sinks in Bayelsa "
+              "state; emergency services put the toll at 24 as the "
+              "search goes on.")},
+    {"kicker": "UKRAINE",
+     "head": "MISSILE HITS ZELENSKY\u2019S HOME CITY",
+     "body": ("A ballistic missile strike on Kryvyi Rih kills two and "
+              "wounds 60, as Russia\u2019s war keeps spilling across "
+              "borders.")},
 ]
 
-FOOTER_LINES = [
+FOOTER = [
     "India 486 for 4 at stumps on day three in Wellington, lead by 118 \u2014 Rahul 136",
     "France asks the UN Security Council to act after Myanmar rejects the ICJ genocide ruling",
 ]
 
 
-def card(draw, x0, y0, w, kicker, headline, blurb):
-    kf = load(SANS_B, 17)
-    draw.text((x0, y0), kicker, font=kf, fill=RED)
-    hf = fit(draw, SERIF_B, headline, w, 21)
-    draw.text((x0, y0 + 24), headline, font=hf, fill=INK)
-    bf = load(SANS, 16)
-    for i, line in enumerate(wrap(draw, blurb, bf, w)[:3]):
-        draw.text((x0, y0 + 58 + i * 21), line, font=bf, fill=INK)
+def draw_story_card(draw, left, top, width, item):
+    kicker_face = font_at(SANS_BOLD, 17)
+    draw.text((left, top), item["kicker"], font=kicker_face, fill=FLAG_RGB)
+    head_face = shrink_to(draw, SERIF_BOLD, item["head"], width, 21)
+    draw.text((left, top + 24), item["head"], font=head_face, fill=INK_RGB)
+    body_face = font_at(SANS_PLAIN, 16)
+    y = top + 58
+    for line in wrap_text(draw, item["body"], body_face, width)[:3]:
+        draw.text((left, y), line, font=body_face, fill=INK_RGB)
+        y += 21
 
 
-def footer(draw):
+def draw_footer(draw):
     y = 944
-    hline(draw, 36, 988, y, INK, 2)
-    ff = load(SANS, 15)
-    for i, line in enumerate(FOOTER_LINES):
-        draw.text((W // 2, y + 12 + i * 22), line, font=ff, fill=GREY,
+    bar(draw, EDGE, FAR, y, INK_RGB, 2)
+    face = font_at(SANS_PLAIN, 15)
+    for line in FOOTER:
+        draw.text((PAGE // 2, y + 12), line, font=face, fill=FAINT_RGB,
                   anchor="ma")
+        y += 22
 
 
-def build(path):
-    img = Image.new("RGB", (W, H), PAPER)
-    draw = ImageDraw.Draw(img)
-    masthead(draw)
-    lead(draw)
-    gx, gy = 36, 522
-    cw, ch = 466, 126
-    gap_x, gap_y = 20, 14
-    for idx, (kicker, head, blurb) in enumerate(STORIES):
-        col, row = idx % 2, idx // 2
-        x0 = gx + col * (cw + gap_x)
-        y0 = gy + row * (ch + gap_y)
-        card(draw, x0, y0, cw, kicker, head, blurb)
+def render_front_page(path):
+    page = Image.new("RGB", (PAGE, PAGE), PAPER_RGB)
+    draw = ImageDraw.Draw(page)
+    draw_nameplate(draw)
+    draw_lead_story(draw)
+    grid_x, grid_y = EDGE, 522
+    cell_w, cell_h = 466, 126
+    for pos, item in enumerate(STORIES):
+        col, row = pos % 2, pos // 2
+        x = grid_x + col * (cell_w + 20)
+        y = grid_y + row * (cell_h + 14)
+        draw_story_card(draw, x, y, cell_w, item)
         if col == 0:
-            draw.line([(x0 + cw + 10, y0 + 4), (x0 + cw + 10, y0 + ch - 4)],
-                      fill=(200, 192, 175), width=1)
-    footer(draw)
-    img.save(path, format="PNG", optimize=True)
+            draw.line([(x + cell_w + 10, y + 4),
+                       (x + cell_w + 10, y + cell_h - 4)],
+                      fill=DIVIDER_RGB, width=1)
+    draw_footer(draw)
+    page.save(path, format="PNG", optimize=True)
 
 
 if __name__ == "__main__":
     import sys
-    build(sys.argv[1] if len(sys.argv) > 1 else "entry.png")
+    render_front_page(sys.argv[1] if len(sys.argv) > 1 else "entry.png")

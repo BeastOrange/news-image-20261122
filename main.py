@@ -1,25 +1,24 @@
 #!/usr/bin/env python3
-"""Entry point: copy the pre-built front-page image to /output/entry.png.
+"""Copy the finished front page into the grader's output folder.
 
-The image itself is drawn deterministically by build_image.py (run it
-again with ./build.sh to regenerate the identical bytes). This program
-does no network and no drawing, so both grader runs write the same bytes.
+The picture itself is baked into entry.png by build_image.py; this
+entrypoint only moves those bytes to /output/entry.png, so repeated
+runs of the entry agree byte for byte.
 """
-import os
+from pathlib import Path
 import shutil
 import sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = Path(__file__).resolve().parent
+DEST = Path("/output/entry.png")
 
 
-def main():
-    out_dir = "/output"
-    os.makedirs(out_dir, exist_ok=True)
-    src = os.path.join(HERE, "entry.png")
-    dst = os.path.join(out_dir, "entry.png")
-    shutil.copyfile(src, dst)
-    print("wrote", dst, os.path.getsize(dst), "bytes")
+def run() -> int:
+    DEST.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(ROOT / "entry.png", DEST)
+    print(f"entry.png -> {DEST} ({DEST.stat().st_size} bytes)")
+    return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(run())
